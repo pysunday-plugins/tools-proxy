@@ -53,7 +53,10 @@ class BaseClass:
         params = mergeObj(
                 dict(flow.request.query),
                 dict(flow.request.urlencoded_form),
-                { 'header_method': flow.request.method })
+                {
+                    'header_method': flow.request.method,
+                    'sd_cookie_flag': flow.request.cookies.get('sd_cookie_flag')
+                })
         try:
             if flow.request.text: params.update(flow.request.json())
         except Exception as e:
@@ -194,6 +197,16 @@ class Playback(BaseClass):
                     content = re.sub(r'\b(.*?)\(', f'{params.get(jsonpKey, jsonpKey)}(', content, 1)
                 flow.response.headers.update({'sunday_flag': 'proxy'})
                 flow.response.content = bytes(content, 'utf-8')
+    
+    def deleteSdCookieFlag(self, flow):
+        if "Cookie" in flow.request.headers and 'sd_cookie_flag' in flow.request.headers["Cookie"]:
+            cookies = flow.request.headers["Cookie"].split("; ")
+            new_cookies = [c for c in cookies if not c.startswith("sd_cookie_flag=")]
+            if new_cookies:
+                flow.request.headers["Cookie"] = "; ".join(new_cookies)
+            else:
+                # 如果删光了就移除 Cookie 头
+                del flow.request.headers["Cookie"]
 
     def request(self, flow):
         urlInfo = urlparse(flow.request.url)
@@ -243,7 +256,7 @@ class Playback(BaseClass):
                     if text:
                         obj = json.loads(text)
                         if key in obj:
-                            filepath = path.join(filepath_tmp, obj[key])
+                            filepath = path.join(filepath_tmp, obj[key] or '')
             if filepath:
                 pass
             elif path.exists(filepath_format) and path.isfile(filepath_format):
@@ -266,7 +279,7 @@ class Playback(BaseClass):
                 targeturl = flow.request.url
                 res = getattr(self.fetch, flow.request.method.lower())(targeturl, data=data, headers=headers)
                 flow.response = http.Response.make(res.status_code, res.content, { **dict(res.headers), "sunday_flag": "proxy" })
-            elif filepath:
+            elif filepath and path.isfile(filepath):
                 if self.getSetting(url, 'response', None):
                     self.responseHandle[url] = filepath
                     return
@@ -294,6 +307,7 @@ class Playback(BaseClass):
                     if type(content) != bytes: content = bytes(content, 'utf-8')
                     flow.response = http.Response.make(status_code, content, [(bytes(key, 'utf-8'), bytes(val, 'utf-8')) for key, val in fields])
             else:
+                self.deleteSdCookieFlag(flow)
                 logger.debug('网络: ' + url)
 
     def fields_parse(self, key, val):
