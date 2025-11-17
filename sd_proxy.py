@@ -73,6 +73,9 @@ class BaseClass:
                 logger.error(f'匹配{url}失败，请检查{urlitem}是否为正则表达式')
         return False
 
+    def error(self, flow):
+        print("error:", flow.error)
+
 
 class Collect(BaseClass):
     def __init__(self, *args, **kwargs):
@@ -369,6 +372,7 @@ class Proxy():
         opts = options.Options(
             listen_host=self.host,
             listen_port=self.port,
+            ssl_insecure=True,
         )
         master = dump.DumpMaster(
             opts,
